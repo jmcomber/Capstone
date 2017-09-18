@@ -57,7 +57,7 @@ y = model.addVars(DIAS, CAMIONES, BLOQUES_HR, vtype=GRB.BINARY, name="y")
 q = model.addVars(DIAS, BLOQUES_HR, range(PUNTOS), range(PUNTOS), vtype=GRB.INTEGER, lb=0, name="q")
 
 #Cantidad basura en tal camión tal día y bloque horario
-k = model.addVars(CAMIONES, DIAS, BLOQUES_HR, vtype=GRB.INTEGER, name="k")
+k = model.addVars(DIAS, CAMIONES, BLOQUES_HR, vtype=GRB.INTEGER, name="k")
 
 #Si camión grande va al vertedero en tal día y bloque horario
 z = model.addVars(DIAS, BLOQUES_HR, vtype=GRB.BINARY, name="z")
@@ -65,7 +65,9 @@ z = model.addVars(DIAS, BLOQUES_HR, vtype=GRB.BINARY, name="z")
 #Cantidad basura en camión grande en tal día y bloque horario
 r = model.addVars(DIAS, BLOQUES_HR_GRANDE, vtype=GRB.INTEGER, name="r")
 
+pasa_por_acopio = model.addVars(DIAS, CAMIONES, BLOQUES_HR, vtype=GRB.BINARY, name="pasa_por_acopio")
 
+aux = model.addVars(DIAS, CAMIONES, BLOQUES_HR, vtype=GRB.INTEGER, lb=0, name="pasa_por_acopio")
 
 #RESTRICCIONES
 
@@ -105,20 +107,52 @@ model.addConstrs(( quicksum(x_rec[d, c, t, i, j] + x_pasa[d, c, t, i, j] \
 	for d in DIAS for c in CAMIONES for t in BLOQUES_HR), name="entra lo mismo que sale")
 
 
-model.addConstrs((k[c, d, t] <= K_C_CHICO for c in CAMIONES for t in BLOQUES_HR \
+model.addConstrs((k[d, c, t] <= K_C_CHICO for c in CAMIONES for t in BLOQUES_HR \
 	for d in DIAS), name="No sobrepasar capacidad camiones chicos")
 
 model.addConstrs((r[d, t] <= K_C_GRANDE for t in BLOQUES_HR \
 	for d in DIAS), name="No sobrepasar capacidad camiones chicos")
 
-# Faltan: relación de recoger con cantidad de basura en camión chico (q, x_rec y k), transferencia a camión grande 
-# (k, r y {(x_rec + x_pasa) en ACOPIO})
+# Falta: cumplir temporalidad de distancia en tiempo (no recorrer más kilómetros 
+# de lo físicamente posible según velocidades en 2 horas)
 
-model.addConstrs((r[d, t+1] >= r[d, t] - K_C_GRANDE for t in BLOQUES_HR \
+model.addConstrs((r[d, t+1] >= r[d, t] - K_C_GRANDE * z[d, t] for t in BLOQUES_HR \
 	for d in DIAS), name="Vaciar camión grande si va al vertedero")
 
+model.addConstrs((k[d, c, t+1] >= k[d, c, t] + q[d, t, i, j] - K_C_CHICO * (1 - x_rec[d, c, t, i, j]) for t in range(5) \
+	for d in DIAS for c in CAMIONES for i in range(PUNTOS) for j in range(PUNTOS)), name="Basura sube a camión que pasa")
+
+model.addConstrs((pasa_por_acopio[d, c, t] >= x_rec[d, c, t, ACOPIO, j] for d in DIAS for c in CAMIONES \
+	for t in BLOQUES_HR for j in range(PUNTOS)), name="Construcción 1")
+
+model.addConstrs((pasa_por_acopio[d, c, t] >= x_pasa[d, c, t, ACOPIO, j] / 1000 for d in DIAS for c in CAMIONES \
+	for t in BLOQUES_HR for j in range(PUNTOS)), name="Construcción 2")
+
+model.addConstrs((k[d, c, t] >= k[d, c, t-1] - K_C_CHICO * pasa_por_acopio[d, c, t-1] for d in DIAS \
+	for c in CAMIONES for t in range(1, 6)), name="Descargar en ACOPIO 1")
+
+model.addConstrs((k[d, c, t] >= k[d, c, t-1] + q[d, t-1, i, j] - K_C_CHICO * x_rec[d, c, t-1, i, j] for d in DIAS \
+	for c in CAMIONES for t in range(1, 6)), name="Descargar en ACOPIO 2")
+
+model.addConstrs((aux[d, c, t] >= k[d, c, t] - K_C_CHICO * pasa_por_acopio[d, c, t] for d in DIAS \
+	for c in CAMIONES for t in BLOQUES_HR), name="Construcción variable auxiliar para crossdocking")
+
+model.addConstrs((r[d, t+1] >= r[d, t] + quicksum(aux[d, c, t] for c in CAMIONES) for d in DIAS \
+	for t in BLOQUES_HR), name="Crossdocking")
+
+model.addConstrs((k[d, c, t] >= k[d, c, t-1] - K_C_CHICO * (1 - z[d, t]) for d in DIAS \
+	for c in CAMIONES for t in range(1, 6)), name="Crossdocking si es que está el camión grande")
+
+#Aquí estamos haciendo que un km recogiendo es 8 minutos, y sin recoger 2
+#DA INFACTIBLE CON LÍMITE DE "VELOCIDAD": datos random están exigiendo mucho a los pobres camiones, que andan re lento
+
+# model.addConstrs((quicksum(DIST[i][j] * (8 * x_rec[d, c, t, i, j] + 2 * x_pasa[d, c, t, i, j]) for i in range(PUNTOS) \
+# 	for j in range(PUNTOS)) <= 120 for d in DIAS for c in CAMIONES for t in BLOQUES_HR), \
+# 	name="límite dists físicas en 2 horas")
 
 
+
+#FUNCIÓN OBJETIVO
 
 obj = quicksum(x_rec[d, c, t, i, j] + 0.2 * x_pasa[d, c, t, i, j] + 0.03 * y[d, c, t] for d in DIAS for c in CAMIONES for t in BLOQUES_HR \
 	for i in range(PUNTOS) for j in range(PUNTOS))
