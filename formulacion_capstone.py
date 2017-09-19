@@ -67,7 +67,7 @@ r = model.addVars(DIAS, BLOQUES_HR_GRANDE, vtype=GRB.INTEGER, name="r")
 
 pasa_por_acopio = model.addVars(DIAS, CAMIONES, BLOQUES_HR, vtype=GRB.BINARY, name="pasa_por_acopio")
 
-aux = model.addVars(DIAS, CAMIONES, BLOQUES_HR, vtype=GRB.INTEGER, lb=0, name="pasa_por_acopio")
+aux = model.addVars(DIAS, CAMIONES, BLOQUES_HR, vtype=GRB.INTEGER, lb=0, name="auxiliar")
 
 #RESTRICCIONES
 
