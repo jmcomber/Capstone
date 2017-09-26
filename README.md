@@ -17,7 +17,7 @@ x_rec = model.addVars(DIAS, CAMIONES, BLOQUES_HR, range(PUNTOS), range(PUNTOS), 
 - Cantidad de veces que camión pasa sin recoger en tal arco en tal día en tal bloque horario
 x_pasa = model.addVars(DIAS, CAMIONES, BLOQUES_HR, range(PUNTOS), range(PUNTOS), vtype=GRB.INTEGER, lb=0, name="x_pasa")
 
-- Si camión activo en día y bloque horario
+-  ***** VARIABLE POR AHORA NO USADA: OPCIONAL ******Si camión activo en día y bloque horario
 y = model.addVars(DIAS, CAMIONES, BLOQUES_HR, vtype=GRB.BINARY, name="y")
 
 - Cantidad basura en arco de dos últimos índices en día y bloque horario
